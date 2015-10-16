@@ -1,0 +1,12 @@
+Would have included, but doesn't fit well currently. No reason to have nighttime yet.
+
+function cycleNight(layer) {
+	
+	if (!(layer.style.opacity))      {layer.style.opacity = 0;}
+	if (layer.counter === undefined) {layer.counter = -400;}
+	
+	layer.style.opacity = Math.sin( (Math.PI * layer.counter) / 720 ) / 1.5;
+	
+	layer.counter += 1;
+	
+}

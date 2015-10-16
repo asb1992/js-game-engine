@@ -1,0 +1,282 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+	<!-- To do:
+		
+		cut and paste areas,
+		importing level pieces might be useful,
+		
+	-->
+
+	<head>
+		
+		<!-- The Chrome Frame tag. -->
+		<meta http-equiv="X-UA-Compatible" content="chrome=1">
+		
+		<title>Ball Editor</title>
+
+		<script type="text/javascript" src="js/protoclass.js"></script>
+		<script type="text/javascript" src="js/box2d.js"></script>
+		<script type="text/javascript" src="js/main.js"></script>
+		<script type="text/javascript" src="../particle/particle.js"></script>
+		<script type="text/javascript" src="../lib/general.js"></script>
+		<script type="text/javascript" src="../lib/functional.js"></script>
+		
+		<style type="text/css">
+		
+		body
+		{
+		overflow-x:hidden;
+		overflow-y:hidden;
+		margin:0px;
+		padding:0px;
+		}
+		
+		#menu
+		{
+		background-color:white;
+		position:absolute;
+		}
+		
+		</style>
+		
+	</head>
+
+	<body>
+		
+		<div id="menu"></div>
+		<canvas id="canvas" style="background-color:white;"></canvas>
+		
+		<script type="text/javascript">
+			
+			canvas.width = document.documentElement.clientWidth;
+			canvas.height = document.documentElement.clientHeight;
+			
+			function init() {
+				
+				// create menu
+				var img = document.createElement('img');
+				img.src = 'images/eraser.png';
+				img.onclick = function(event) {
+					currentItem = "eraser";
+					stopEvent(event);
+				};
+				$("menu").appendChild(img);
+				
+				for (var chr in charMap) {
+					
+					if (charMap[chr].npc != "bullet" &&
+						charMap[chr].npc != "random") {
+						
+						var img = document.createElement('img');
+						img.src = 'images/' + charMap[chr].image;
+						img.chr = chr;
+						img.onclick = function(event) {
+							currentItem = event.target.chr;
+							stopEvent(event);
+						};
+						$("menu").appendChild(img);
+						
+					}
+					
+				}
+				
+				canvas.onclick = click;
+				document.onkeydown = keydown;
+				
+				tileSideLength = 40;
+				ctx = $("canvas").getContext("2d");
+				
+				items = [];
+				for (var i in charMap) items.push(i);
+				currentItem = items[0];
+				
+				worldData = [];
+				
+				worldOffsetX = 0;
+				worldOffsetY = 0;
+				
+				// get names of existing files
+				var xhr = new XMLHttpRequest();
+				xhr.open("GET", "filenames.php", false);
+				xhr.send();
+				usedFileNames = JSON.parse(xhr.responseText);
+				
+				function clear() {
+					
+					ctx.clearRect(-worldOffsetX, -worldOffsetY,
+					document.documentElement.clientWidth,
+					document.documentElement.clientHeight);
+					
+				}
+				
+				function drawWorld(worldData) {
+					
+					clear();
+					
+					for (var i = 0; i < worldData.length; i++) {
+						
+						var img = new Image();
+						img.src = "images/" + charMap[worldData[i].chr].image;
+						ctx.drawImage(img,
+							worldData[i].x,
+							worldData[i].y);
+						
+					}
+					
+				}
+				
+				function click(event) {
+					
+					var x = event.clientX - (event.clientX % tileSideLength);
+					var y = event.clientY - (event.clientY % tileSideLength);
+					
+					if (event.button == 0) {
+						
+						if (currentItem == "eraser") {
+							
+							// goes in reverse to delete things on top first.
+							for (var i = worldData.length - 1; i >= 0; i--) {
+								
+								if (worldData[i].x == x - worldOffsetX && 
+									worldData[i].y == y - worldOffsetY) {
+									
+									worldData.splice(i, 1);
+									break; // only delete one.
+									
+									
+								}
+								
+							}
+							
+							drawWorld(worldData);
+							
+						}
+						
+						else {
+							
+							worldData.push(
+								{
+								"chr" : currentItem,
+								"x"   : x - worldOffsetX,
+								"y"   : y - worldOffsetY,
+								}
+							);
+							
+							drawWorld(worldData);					
+							
+						}
+						
+						stopEvent(event);
+						
+					}
+					
+					if (event.button == 1) { // middle mouse
+						
+						currentItem = items[(items.indexOf(currentItem) + 1) % items.length];
+						stopEvent(event);
+						
+					}
+					
+				}
+				
+				function keydown(event) {
+					
+					var key = event.keyCode;
+					
+					if (key == 65) {worldOffsetX -= tileSideLength; ctx.translate(-tileSideLength, 0); stopEvent(event);}
+					if (key == 68) {worldOffsetX += tileSideLength; ctx.translate(tileSideLength, 0); stopEvent(event);}
+					if (key == 87) {worldOffsetY -= tileSideLength; ctx.translate(0, -tileSideLength); stopEvent(event);}
+					if (key == 83) {worldOffsetY += tileSideLength; ctx.translate(0, tileSideLength); stopEvent(event);}
+					
+					if (key == 65 || key == 68 || key == 87 || key == 83) {
+						
+						drawWorld(worldData);
+						
+					}
+					
+					if (key == 13) { // save, enter
+						
+						var filename = prompt("Save as: ");
+						
+						// if they provided a valid filename
+						if (filename && filename !== '.' && filename !== '..') {
+							
+							var overwrite = true;
+							
+							if (usedFileNames.indexOf(filename) !== -1) {
+								
+								overwrite = confirm(
+									'Filename in use. Do you wish to overwrite the file?');
+								
+							}
+							
+							if (overwrite) {
+								
+								usedFileNames.push(filename);
+								var xhr = new XMLHttpRequest();
+								var params = "filename=" + encodeURIComponent(filename) +
+									"&worldData=" + JSON.stringify(worldData);
+								
+								xhr.open("POST", "save.php", false);
+								xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+								
+								xhr.send(params);
+								
+								alert(xhr.responseText);
+								
+							}
+							
+						}
+						
+						else {alert('Invalid file name.');}
+												
+						stopEvent(event);
+						
+					}
+					
+					if (key == 76) { // load, L
+						
+						var filename = prompt("Load: ");
+						if (filename) {
+							
+							if ($('loaded')) {deleteNode($('loaded'));}
+							var elem = document.createElement('script');
+							elem.type = 'text/javascript';
+							elem.id = 'loaded';
+							// random number prevents caching
+							elem.src = 'levels/' + filename + '/level.js?' + Math.random();
+							elem.onload = function() {
+								ctx.translate(-worldOffsetX, -worldOffsetY);
+								worldOffsetX = 0;
+								worldOffsetY = 0;
+								drawWorld(worldData)
+							};
+							document.body.appendChild(elem);
+							
+						}
+						stopEvent(event);
+						
+					}
+					
+					if (key == 46) { // undo, del
+						
+						var elem = worldData[worldData.length-1];
+						worldData.pop();
+						drawWorld(worldData);
+						stopEvent(event);
+					
+					}
+					
+				}
+				
+			}
+			
+			loadScript("../ball2canvas/charMap.js", init);
+			
+		</script>
+
+	</body>
+
+</html>
